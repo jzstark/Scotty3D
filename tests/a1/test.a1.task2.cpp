@@ -158,6 +158,17 @@ Test test_a1_task2_diamond_outside("a1.task2.diamond.outside", []() {
 });
 
 
+Test test_a1_task2_diamond_outside2("a1.task2.diamond.outside2", []() {
+	check_line_covers(
+		"line outside diamond (2,0)",
+		{ Vec2(0.f, 0.f), Vec2(2.1f, 0.99f) },
+		{"...",
+		 "...",
+		 "##."}
+	);
+});
+
+
 //----------------------------
 //simple horizontal and vertical lines (set up so that no enter/exit logic needed):
 
