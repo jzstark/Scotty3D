@@ -469,6 +469,105 @@ void Pipeline<p, P, flags>::rasterize_triangle(
 	//  same code paths. Be aware, however, that all of them need to remain working!
 	//  (e.g., if you break Flat while implementing Correct, you won't get points
 	//   for Flat.)
+
+	// Helper function to compute edge function
+	auto edge_function = [](const Vec2 &a, const Vec2 &b, const Vec2 &c) {
+        return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+	};
+
+	// Compute derivatives analytically
+	auto compute_derivatives = [](const ClippedVertex& va, const ClippedVertex& vb, const ClippedVertex& vc) {
+    	std::array<Vec2, P::FD> derivatives;
+    	float epsilon = 1e-5f;
+
+		for (size_t i = 0; i < P::FD; ++i) {
+        	float attr_a = va.attributes[i];
+        	float attr_b = vb.attributes[i];
+        	float attr_c = vc.attributes[i];
+
+        	/* float d_attr_dx = ((attr_b - attr_a) * (vc.fb_position.y - va.fb_position.y) - (attr_c - attr_a) * (vb.fb_position.y - va.fb_position.y)) /
+                          ((vb.fb_position.x - va.fb_position.x) * (vc.fb_position.y - va.fb_position.y) - (vc.fb_position.x - va.fb_position.x) * (vb.fb_position.y - va.fb_position.y));
+
+        	float d_attr_dy = ((attr_b - attr_a) * (vc.fb_position.x - va.fb_position.x) - (attr_c - attr_a) * (vb.fb_position.x - va.fb_position.x)) /
+                          ((vb.fb_position.y - va.fb_position.y) * (vc.fb_position.x - va.fb_position.x) - (vc.fb_position.y - va.fb_position.y) * (vb.fb_position.x - va.fb_position.x));
+			*/
+			// Perturb x coordinate
+        	float attr_x_plus = (attr_a * (va.fb_position.x + epsilon) + attr_b * (vb.fb_position.x + epsilon) + attr_c * (vc.fb_position.x + epsilon)) / 3.0f;
+        	float attr_x_minus = (attr_a * (va.fb_position.x - epsilon) + attr_b * (vb.fb_position.x - epsilon) + attr_c * (vc.fb_position.x - epsilon)) / 3.0f;
+        	float d_attr_dx = (attr_x_plus - attr_x_minus) / (2 * epsilon);
+
+        	// Perturb y coordinate
+        	float attr_y_plus = (attr_a * (va.fb_position.y + epsilon) + attr_b * (vb.fb_position.y + epsilon) + attr_c * (vc.fb_position.y + epsilon)) / 3.0f;
+        	float attr_y_minus = (attr_a * (va.fb_position.y - epsilon) + attr_b * (vb.fb_position.y - epsilon) + attr_c * (vc.fb_position.y - epsilon)) / 3.0f;
+        	float d_attr_dy = (attr_y_plus - attr_y_minus) / (2 * epsilon);
+
+        	derivatives[i] = Vec2(d_attr_dx, d_attr_dy);
+    	}
+
+    	return derivatives;
+	};
+
+    // Convert vertices to 2D screen space -- assume I don't need this step and the va, vb, and vc values are already in screen space.
+	/* glm::vec2 v0 = glm::vec2(va.position) / va.position.w;
+    glm::vec2 v1 = glm::vec2(vb.position) / vb.position.w;
+    glm::vec2 v2 = glm::vec2(vc.position) / vc.position.w; */
+
+    // Compute bounding box of the triangle
+    float minX = std::min({va.fb_position.x, vb.fb_position.x, vc.fb_position.x});
+	float minY = std::min({va.fb_position.y, vb.fb_position.y, vc.fb_position.y});
+	float maxX = std::max({va.fb_position.x, vb.fb_position.x, vc.fb_position.x});
+	float maxY = std::max({va.fb_position.y, vb.fb_position.y, vc.fb_position.y});
+
+	for (int y = std::floor(minY); y <= std::ceil(maxY); ++y) {
+        for (int x = std::floor(minX); x <= std::ceil(maxX); ++x) { 
+
+			// Compute barycentric coordinates
+			Vec2 point = Vec2(x + 0.5f, y + 0.5f);
+
+			float w0 = edge_function(vb.fb_position.xy(), vc.fb_position.xy(), point);
+			float w1 = edge_function(vc.fb_position.xy(), va.fb_position.xy(), point);
+			float w2 = edge_function(va.fb_position.xy(), vb.fb_position.xy(), point);
+
+			// Check if the fragment is inside the triangle
+			if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) {
+				// Compute barycentric coordinates
+				float total = w0 + w1 + w2;
+				w0 /= total;
+				w1 /= total;
+				w2 /= total;
+
+				// Interpolate z
+				float z = w0 * va.fb_position.z + w1 * vb.fb_position.z + w2 * vc.fb_position.z;
+
+				// Interpolate attributes
+				std::array<float, P::FA> attributes;
+				if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Flat) {
+					attributes = va.attributes;
+				} else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Smooth) {
+					//TODO
+					for (int i = 0; i < P::FA; ++i) {
+						attributes[i] = w0 * va.attributes[i] + w1 * vb.attributes[i] + w2 * vc.attributes[i];
+					}
+				} else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Correct) {
+					//TODO
+					attributes = va.attributes;
+				}
+
+				// Compute derivatives
+				std::array<Vec2, P::FD> derivatives = compute_derivatives(va, vb, vc);;
+
+				// Plot the fragment
+				Fragment mid;
+				mid.fb_position  = Vec3(x + 0.5, y + 0.5, z);
+				mid.attributes   = attributes;
+				mid.derivatives  = derivatives;
+
+				emit_fragment(mid);
+			}
+		}
+	}
+
+	/* 
 	if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Flat) {
 		// A1T3: flat triangles
 		// TODO: rasterize triangle (see block comment above this function).
@@ -492,7 +591,7 @@ void Pipeline<p, P, flags>::rasterize_triangle(
 		// As a placeholder, here's code that calls the Screen-space interpolation function:
 		//(remove this and replace it with a real solution)
 		Pipeline<PrimitiveType::Lines, P, (flags & ~PipelineMask_Interp) | Pipeline_Interp_Smooth>::rasterize_triangle(va, vb, vc, emit_fragment);
-	}
+	} */
 }
 
 //-------------------------------------------------------------------------
