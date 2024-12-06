@@ -475,33 +475,40 @@ void Pipeline<p, P, flags>::rasterize_triangle(
         return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
 	};
 
+	// Helper function to compute attributes
+	auto compute_attr = [](const ClippedVertex &va, const ClippedVertex &vb, const ClippedVertex &vc, float w0, float w1, float w2, int x, int y) {
+        std::array<float, P::FA> attributes;
+
+        if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Flat) {
+            attributes = va.attributes;
+        } else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Smooth) {
+            for (int i = 0; i < P::FA; ++i) {
+                attributes[i] = w0 * va.attributes[i] + w1 * vb.attributes[i] + w2 * vc.attributes[i];
+            }
+        } else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Correct) {
+            // TODO: Implement perspective-correct interpolation
+            attributes = va.attributes;
+        }
+        return attributes;
+    };
+
 	// Compute derivatives analytically
-	auto compute_derivatives = [](const ClippedVertex& va, const ClippedVertex& vb, const ClippedVertex& vc) {
+	auto compute_derivatives = [&](const ClippedVertex& va, const ClippedVertex& vb, const ClippedVertex& vc, float w0, float w1, float w2, int x, int y) {
     	std::array<Vec2, P::FD> derivatives;
     	float epsilon = 1e-5f;
+		
+		std::array<float, P::FA> attr_x_y = compute_attr(va, vb, vc, w0, w1, w2, x, y); //TODO: here repeat computation in the main routine
+		std::array<float, P::FA> attr_x_d = compute_attr(va, vb, vc, w0, w1, w2, x + epsilon, y);
+		std::array<float, P::FA> attr_y_d = compute_attr(va, vb, vc, w0, w1, w2, x, y + epsilon);
+
+		std::array<float, P::FA> d_attr_dx, d_attr_dy;
+		for (int i = 0; i < P::FA; ++i) {
+			d_attr_dx[i] = (attr_x_d[i] - attr_x_y[i]) / epsilon;
+			d_attr_dy[i] = (attr_y_d[i] - attr_x_y[i]) / epsilon;
+		}
 
 		for (size_t i = 0; i < P::FD; ++i) {
-        	float attr_a = va.attributes[i];
-        	float attr_b = vb.attributes[i];
-        	float attr_c = vc.attributes[i];
-
-        	/* float d_attr_dx = ((attr_b - attr_a) * (vc.fb_position.y - va.fb_position.y) - (attr_c - attr_a) * (vb.fb_position.y - va.fb_position.y)) /
-                          ((vb.fb_position.x - va.fb_position.x) * (vc.fb_position.y - va.fb_position.y) - (vc.fb_position.x - va.fb_position.x) * (vb.fb_position.y - va.fb_position.y));
-
-        	float d_attr_dy = ((attr_b - attr_a) * (vc.fb_position.x - va.fb_position.x) - (attr_c - attr_a) * (vb.fb_position.x - va.fb_position.x)) /
-                          ((vb.fb_position.y - va.fb_position.y) * (vc.fb_position.x - va.fb_position.x) - (vc.fb_position.y - va.fb_position.y) * (vb.fb_position.x - va.fb_position.x));
-			*/
-			// Perturb x coordinate
-        	float attr_x_plus = (attr_a * (va.fb_position.x + epsilon) + attr_b * (vb.fb_position.x + epsilon) + attr_c * (vc.fb_position.x + epsilon)) / 3.0f;
-        	float attr_x_minus = (attr_a * (va.fb_position.x - epsilon) + attr_b * (vb.fb_position.x - epsilon) + attr_c * (vc.fb_position.x - epsilon)) / 3.0f;
-        	float d_attr_dx = (attr_x_plus - attr_x_minus) / (2 * epsilon);
-
-        	// Perturb y coordinate
-        	float attr_y_plus = (attr_a * (va.fb_position.y + epsilon) + attr_b * (vb.fb_position.y + epsilon) + attr_c * (vc.fb_position.y + epsilon)) / 3.0f;
-        	float attr_y_minus = (attr_a * (va.fb_position.y - epsilon) + attr_b * (vb.fb_position.y - epsilon) + attr_c * (vc.fb_position.y - epsilon)) / 3.0f;
-        	float d_attr_dy = (attr_y_plus - attr_y_minus) / (2 * epsilon);
-
-        	derivatives[i] = Vec2(d_attr_dx, d_attr_dy);
+        	derivatives[i] = Vec2(d_attr_dx[i], d_attr_dy[i]);
     	}
 
     	return derivatives;
@@ -535,26 +542,14 @@ void Pipeline<p, P, flags>::rasterize_triangle(
 				w0 /= total;
 				w1 /= total;
 				w2 /= total;
-
 				// Interpolate z
 				float z = w0 * va.fb_position.z + w1 * vb.fb_position.z + w2 * vc.fb_position.z;
 
 				// Interpolate attributes
-				std::array<float, P::FA> attributes;
-				if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Flat) {
-					attributes = va.attributes;
-				} else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Smooth) {
-					//TODO
-					for (int i = 0; i < P::FA; ++i) {
-						attributes[i] = w0 * va.attributes[i] + w1 * vb.attributes[i] + w2 * vc.attributes[i];
-					}
-				} else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Correct) {
-					//TODO
-					attributes = va.attributes;
-				}
+				std::array<float, P::FA> attributes = compute_attr(va, vb, vc, w0, w1, w2, x, y);
 
 				// Compute derivatives
-				std::array<Vec2, P::FD> derivatives = compute_derivatives(va, vb, vc);;
+				std::array<Vec2, P::FD> derivatives = compute_derivatives(va, vb, vc, w0, w1, w2, x, y);;
 
 				// Plot the fragment
 				Fragment mid;
