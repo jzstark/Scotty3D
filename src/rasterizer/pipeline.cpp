@@ -488,13 +488,18 @@ void Pipeline<p, P, flags>::rasterize_triangle(
         std::array<float, P::FA> attributes;
 
         if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Flat) {
+			// A1T3: flat triangles
+			// TODO: rasterize triangle (see block comment above this function).
             attributes = va.attributes;
         } else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Smooth) {
+			// A1T5: screen-space smooth triangles
+			// TODO: rasterize triangle (see block comment above this function).
             for (int i = 0; i < P::FA; ++i) {
                 attributes[i] = w0 * va.attributes[i] + w1 * vb.attributes[i] + w2 * vc.attributes[i];
             } 
         } else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Correct) {
-            // TODO: Implement perspective-correct interpolation
+			// A1T5: perspective correct triangles
+			// TODO: rasterize triangle (block comment above this function).
             attributes = va.attributes;
 			float zp = w0 * va.inv_w + w1 * vb.inv_w + w2 * vc.inv_w; 
             for (int i = 0; i < P::FA; ++i) {
@@ -505,32 +510,7 @@ void Pipeline<p, P, flags>::rasterize_triangle(
         return attributes;
     };
 
-	// Compute derivatives analytically
-	/* auto compute_derivatives = [&](const ClippedVertex& va, const ClippedVertex& vb, const ClippedVertex& vc, float w0, float w1, float w2, int x, int y) {
-    	std::array<Vec2, P::FD> derivatives;
-    	// float epsilon = 1e-5f;
-		
-		std::array<float, P::FA> attr_x_y = compute_attr(va, vb, vc, w0, w1, w2, x, y); //TODO: here repeat computation in the main routine
-		std::array<float, P::FA> attr_x_d = compute_attr(va, vb, vc, w0, w1, w2, x + 1, y);
-		std::array<float, P::FA> attr_y_d = compute_attr(va, vb, vc, w0, w1, w2, x, y + 1);
-
-		std::array<float, P::FA> d_attr_dx, d_attr_dy;
-		for (int i = 0; i < P::FA; ++i) {
-			d_attr_dx[i] = (attr_x_d[i] - attr_x_y[i]) ;
-			d_attr_dy[i] = (attr_y_d[i] - attr_x_y[i]) ;
-		}
-
-		for (size_t i = 0; i < P::FD; ++i) {
-        	derivatives[i] = Vec2(d_attr_dx[i], d_attr_dy[i]);
-    	}
-
-    	return derivatives;
-	}; */
-
     // Convert vertices to 2D screen space -- assume I don't need this step and the va, vb, and vc values are already in screen space.
-	/* glm::vec2 v0 = glm::vec2(va.position) / va.position.w;
-    glm::vec2 v1 = glm::vec2(vb.position) / vb.position.w;
-    glm::vec2 v2 = glm::vec2(vc.position) / vc.position.w; */
 
     // Compute bounding box of the triangle
     float minX = std::min({va.fb_position.x, vb.fb_position.x, vc.fb_position.x});
@@ -538,6 +518,8 @@ void Pipeline<p, P, flags>::rasterize_triangle(
 	float maxX = std::max({va.fb_position.x, vb.fb_position.x, vc.fb_position.x});
 	float maxY = std::max({va.fb_position.y, vb.fb_position.y, vc.fb_position.y});
 
+	// Process a 2x2 block of fragments at a time
+	// https://fgiesen.wordpress.com/2011/07/10/a-trip-through-the-graphics-pipeline-2011-part-8/
 	for (int y = std::floor(minY); y <= std::ceil(maxY); y+=2) {
         for (int x = std::floor(minX); x <= std::ceil(maxX); x+=2) { 
 
@@ -564,108 +546,87 @@ void Pipeline<p, P, flags>::rasterize_triangle(
 			float w42 = edge_function(va.fb_position.xy(), vb.fb_position.xy(), point4);
 
 			// Check if the 1st fragment is inside the triangle
-			// if ((w10 >= 0 && w11 >= 0 && w12 >= 0) || (w10 <= 0 && w11 <= 0 && w12 <= 0)) {
-			if (within_triangle(w10, w11, w12)){
-				// Compute barycentric coordinates
-				float total1 = w10 + w11 + w12;
-				w10 /= total1;
-				w11 /= total1;
-				w12 /= total1;
+			bool flag_wt1 = within_triangle(w10, w11, w12);
+			bool flag_wt2 = within_triangle(w20, w21, w22);
+			bool flag_wt3 = within_triangle(w30, w31, w32);
+			bool flag_wt4 = within_triangle(w40, w41, w42);
+			if (!flag_wt1 && !flag_wt2 && !flag_wt3 && !flag_wt4) {
+				continue;
+			}
+
+			// Compute barycentric coordinates
+			float total1 = w10 + w11 + w12;
+			w10 /= total1;
+			w11 /= total1;
+			w12 /= total1;
 				
-				float total2 = w20 + w21 + w22;
-				w20 /= total2;
-				w21 /= total2;
-				w22 /= total2;
+			float total2 = w20 + w21 + w22;
+			w20 /= total2;
+			w21 /= total2;
+			w22 /= total2;
 
-				float total3 = w30 + w31 + w32;
-				w30 /= total3; 
-				w31 /= total3;
-				w32 /= total3; 
+			float total3 = w30 + w31 + w32;
+			w30 /= total3; 
+			w31 /= total3;
+			w32 /= total3; 
 
-				float total4 = w40 + w41 + w42;
-				w40 /= total4; 
-				w41 /= total4;
-				w42 /= total4; 
+			float total4 = w40 + w41 + w42;
+			w40 /= total4; 
+			w41 /= total4;
+			w42 /= total4; 
 
-				// Interpolate z
-				float z1 = w10 * va.fb_position.z + w11 * vb.fb_position.z + w12 * vc.fb_position.z;
-				float z2 = w20 * va.fb_position.z + w21 * vb.fb_position.z + w22 * vc.fb_position.z;
-				float z3 = w30 * va.fb_position.z + w31 * vb.fb_position.z + w32 * vc.fb_position.z;
-				float z4 = w40 * va.fb_position.z + w41 * vb.fb_position.z + w42 * vc.fb_position.z;
+			// Interpolate z
+			float z1 = w10 * va.fb_position.z + w11 * vb.fb_position.z + w12 * vc.fb_position.z;
+			float z2 = w20 * va.fb_position.z + w21 * vb.fb_position.z + w22 * vc.fb_position.z;
+			float z3 = w30 * va.fb_position.z + w31 * vb.fb_position.z + w32 * vc.fb_position.z;
+			float z4 = w40 * va.fb_position.z + w41 * vb.fb_position.z + w42 * vc.fb_position.z;
 
-				// Interpolate attributes
-				std::array<float, P::FA> attributes1 = compute_attr(va, vb, vc, w10, w11, w12);
-				std::array<float, P::FA> attributes2 = compute_attr(va, vb, vc, w20, w21, w22);
-				std::array<float, P::FA> attributes3 = compute_attr(va, vb, vc, w30, w31, w32);
-				std::array<float, P::FA> attributes4 = compute_attr(va, vb, vc, w40, w41, w42);
+			// Interpolate attributes
+			std::array<float, P::FA> attributes1 = compute_attr(va, vb, vc, w10, w11, w12);
+			std::array<float, P::FA> attributes2 = compute_attr(va, vb, vc, w20, w21, w22);
+			std::array<float, P::FA> attributes3 = compute_attr(va, vb, vc, w30, w31, w32);
+			std::array<float, P::FA> attributes4 = compute_attr(va, vb, vc, w40, w41, w42);
 
-				// Compute derivatives
-				std::array<Vec2, P::FD> derivatives;
-				for (size_t i = 0; i < P::FD; ++i) {
-					//float d_attr_dx = attributes4[i] - attributes3[i] + attributes2[i] - attributes1[i];
-					//float d_attr_dy = -attributes4[i] - attributes3[i] + attributes2[i] + attributes1[i];
-					float d_attr_dx = attributes2[i] - attributes1[i] + attributes4[i] - attributes3[i];
-					float d_attr_dy = attributes3[i] - attributes1[i] + attributes4[i] - attributes2[i];
+			// Compute derivatives as if all four fragments are eligible
+			std::array<Vec2, P::FD> derivatives;
+			for (size_t i = 0; i < P::FD; ++i) {
+				// Computation method answerd by ChatGPT; could be wrong 
+				float d_attr_dx = attributes2[i] - attributes1[i] + attributes4[i] - attributes3[i];
+				float d_attr_dy = attributes3[i] - attributes1[i] + attributes4[i] - attributes2[i];
+				derivatives[i] = Vec2(d_attr_dx / 2, d_attr_dy / 2);
+			}
 
-       		 		derivatives[i] = Vec2(d_attr_dx / 2, d_attr_dy / 2);
-    			}
-
-				// Plot the fragment
-				Fragment f1, f2, f3, f4;
+			// Plot the fragment if within triangle boundary 
+			Fragment f1, f2, f3, f4;
+			if (flag_wt1) {
 				f1.fb_position  = Vec3(x + 0.5, y + 0.5, z1);
 				f1.attributes   = attributes1;
 				f1.derivatives  = derivatives;
 				emit_fragment(f1);
-				
-				if (within_triangle(w20, w21, w22)){
-					f2.fb_position  = Vec3(x + 1.5, y + 0.5, z2);
-					f2.attributes   = attributes2;
-					f2.derivatives  = derivatives;
-					emit_fragment(f2);
-				}
+			}
+			
+			if (flag_wt2){
+				f2.fb_position  = Vec3(x + 1.5, y + 0.5, z2);
+				f2.attributes   = attributes2;
+				f2.derivatives  = derivatives;
+				emit_fragment(f2);
+			}
 
-				if (within_triangle(w30, w31, w32)){
-					f3.fb_position  = Vec3(x + 0.5, y + 1.5, z3);
-					f3.attributes   = attributes3;
-					f3.derivatives  = derivatives;
-					emit_fragment(f3);
-				}
-				
-				if (within_triangle(w40, w41, w42)){
-					f4.fb_position  = Vec3(x + 1.5, y + 1.5, z4);
-					f4.attributes   = attributes4;
-					f4.derivatives  = derivatives;
-					emit_fragment(f4);
-				}
+			if (flag_wt3){
+				f3.fb_position  = Vec3(x + 0.5, y + 1.5, z3);
+				f3.attributes   = attributes3;
+				f3.derivatives  = derivatives;
+				emit_fragment(f3);
+			}
+			
+			if (flag_wt4){
+				f4.fb_position  = Vec3(x + 1.5, y + 1.5, z4);
+				f4.attributes   = attributes4;
+				f4.derivatives  = derivatives;
+				emit_fragment(f4);
 			}
 		}
 	}
-
-	/* 
-	if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Flat) {
-		// A1T3: flat triangles
-		// TODO: rasterize triangle (see block comment above this function).
-
-		// As a placeholder, here's code that draws some lines:
-		//(remove this and replace it with a real solution)
-		Pipeline<PrimitiveType::Lines, P, flags>::rasterize_line(va, vb, emit_fragment);
-		Pipeline<PrimitiveType::Lines, P, flags>::rasterize_line(vb, vc, emit_fragment);
-		Pipeline<PrimitiveType::Lines, P, flags>::rasterize_line(vc, va, emit_fragment);
-	} else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Smooth) {
-		// A1T5: screen-space smooth triangles
-		// TODO: rasterize triangle (see block comment above this function).
-
-		// As a placeholder, here's code that calls the Flat interpolation version of the function:
-		//(remove this and replace it with a real solution)
-		Pipeline<PrimitiveType::Lines, P, (flags & ~PipelineMask_Interp) | Pipeline_Interp_Flat>::rasterize_triangle(va, vb, vc, emit_fragment);
-	} else if constexpr ((flags & PipelineMask_Interp) == Pipeline_Interp_Correct) {
-		// A1T5: perspective correct triangles
-		// TODO: rasterize triangle (block comment above this function).
-
-		// As a placeholder, here's code that calls the Screen-space interpolation function:
-		//(remove this and replace it with a real solution)
-		Pipeline<PrimitiveType::Lines, P, (flags & ~PipelineMask_Interp) | Pipeline_Interp_Smooth>::rasterize_triangle(va, vb, vc, emit_fragment);
-	} */
 }
 
 //-------------------------------------------------------------------------
