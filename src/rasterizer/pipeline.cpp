@@ -130,8 +130,7 @@ void Pipeline<primitive_type, Program, flags>::run(std::vector<Vertex> const& ve
 		// local names that refer to destination sample in framebuffer:
 		float& fb_depth = framebuffer.depth_at(x, y, 0);
 		Spectrum& fb_color = framebuffer.color_at(x, y, 0);
-
-
+        
 		// depth test:
 		if constexpr ((flags & PipelineMask_Depth) == Pipeline_Depth_Always) {
 			// "Always" means the depth test always passes.
@@ -142,6 +141,9 @@ void Pipeline<primitive_type, Program, flags>::run(std::vector<Vertex> const& ve
 			// "Less" means the depth test passes when the new fragment has depth less than the stored depth.
 			// A1T4: Depth_Less
 			// TODO: implement depth test! We want to only emit fragments that have a depth less than the stored depth, hence "Depth_Less".
+			float fragment_depth = f.fb_position.z;
+			if (fb_depth <= fragment_depth) continue;
+			fb_depth = fragment_depth;
 		} else {
 			static_assert((flags & PipelineMask_Depth) <= Pipeline_Depth_Always, "Unknown depth test flag.");
 		}
@@ -164,12 +166,12 @@ void Pipeline<primitive_type, Program, flags>::run(std::vector<Vertex> const& ve
 			} else if constexpr ((flags & PipelineMask_Blend) == Pipeline_Blend_Add) {
 				// A1T4: Blend_Add
 				// TODO: framebuffer color should have fragment color multiplied by fragment opacity added to it.
-				fb_color = sf.color; //<-- replace this line
+				fb_color = sf.color * sf.opacity + fb_color; 
 			} else if constexpr ((flags & PipelineMask_Blend) == Pipeline_Blend_Over) {
 				// A1T4: Blend_Over
 				// TODO: set framebuffer color to the result of "over" blending (also called "alpha blending") the fragment color over the framebuffer color, using the fragment's opacity
 				// 		 You may assume that the framebuffer color has its alpha premultiplied already, and you just want to compute the resulting composite color
-				fb_color = sf.color; //<-- replace this line
+				fb_color = sf.color + fb_color * (1.0f - sf.opacity);
 			} else {
 				static_assert((flags & PipelineMask_Blend) <= Pipeline_Blend_Over, "Unknown blending flag.");
 			}
@@ -447,7 +449,9 @@ void Pipeline<p, P, flags>::rasterize_line(
  *
  *  One approach is to rasterize blocks of four fragments and use forward and backward differences to compute derivatives.
  *  To assist you in this approach, keep in mind that the framebuffer size is *guaranteed* to be even. (see framebuffer.h)
- *
+ * 
+ * 
+ * TODO: This problem is NOT addressed yet!!!!!
  * Notes on coverage:
  *  If two triangles are on opposite sides of the same edge, and a
  *  fragment center lies on that edge, rasterize_triangle should
