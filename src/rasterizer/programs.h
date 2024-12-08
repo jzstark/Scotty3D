@@ -7,6 +7,7 @@
 
 #include "../lib/mathlib.h"
 #include "../scene/texture.h"
+#include <iostream>
 
 namespace Programs {
 
@@ -123,8 +124,19 @@ struct Lambertian {
 		// reading onward, you will discover that \rho can be computed in a number of ways
 		//  it is up to you to select one that makes sense in this context
 
-		float lod = 0.0f; //<-- replace this line
-		//-----
+		float dudx = fdx_texcoord.x * wh.x ;
+		float dvdx = fdx_texcoord.y * wh.y ;
+		float dudy = fdy_texcoord.x * wh.x ;
+		float dvdy = fdy_texcoord.y * wh.y ;
+
+		float lx = std::sqrt(dudx * dudx + dvdx * dvdx);
+    	float ly = std::sqrt(dudy * dudy + dvdy * dvdy);
+		float lambda = std::log2(std::max(lx, ly));
+
+		std::cout << lx << " " << ly << " " << lambda << " " << parameters.image->levels.size() - 1 << std::endl;
+
+    	// Clamp the LOD to the valid range of mip-map levels
+    	float lod = std::clamp(lambda, 0.0f, static_cast<float>(parameters.image->levels.size() - 1));
 
 		Vec3 normal = fa_normal.unit();
 

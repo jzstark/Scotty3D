@@ -8,6 +8,7 @@ namespace Textures {
 
 Spectrum sample_nearest(HDR_Image const &image, Vec2 uv) {
 	//clamp texture coordinates, convert to [0,w]x[0,h] pixel space:
+	// std::cout << "sample_nearest!!!" << std::endl;
 	float x = image.w * std::clamp(uv.x, 0.0f, 1.0f);
 	float y = image.h * std::clamp(uv.y, 0.0f, 1.0f);
 
@@ -25,16 +26,74 @@ Spectrum sample_nearest(HDR_Image const &image, Vec2 uv) {
 Spectrum sample_bilinear(HDR_Image const &image, Vec2 uv) {
 	// A1T6: sample_bilinear
 	//TODO: implement bilinear sampling strategy on texture 'image'
+	
+	// Convert UV coordinates to texel space
+	// std::cout << "sample_bilinear!!!" << std::endl;
+    float x = uv.x * (image.w - 1);
+    float y = uv.y * (image.h - 1);
+	// float x = image.w * std::clamp(uv.x, 0.0f, 1.0f);
+	// float y = image.h * std::clamp(uv.y, 0.0f, 1.0f);
 
-	return sample_nearest(image, uv); //placeholder so image doesn't look blank
+    // Compute the integer coordinates of the four nearest texels
+    int32_t x0 = int32_t(std::floor(x));
+    int32_t y0 = int32_t(std::floor(y));
+    x0 = std::min(x0, int32_t(image.w) - 1);
+    y0 = std::min(y0, int32_t(image.h) - 1);
+    int32_t x1 = std::min(x0 + 1, int32_t(image.w) - 1);
+    int32_t y1 = std::min(y0 + 1, int32_t(image.h) - 1);
+
+    // Sample the four nearest texels
+    Spectrum c00 = image.at(x0, y0);
+    Spectrum c10 = image.at(x1, y0);
+    Spectrum c01 = image.at(x0, y1);
+    Spectrum c11 = image.at(x1, y1);
+    
+	// Compute the interpolation weights
+    float u = x - x0;
+    float v = y - y0;
+	
+	/* std::cout << "uv.x" << uv.x << ", uv.y: " << uv.y << std::endl;
+	std::cout << "x: " << x << ", y: " << y << std::endl;
+	std::cout << "x0: " << x0 << ", y0: " << y0 << std::endl;
+	std::cout << "u: " << u << ", v: " << v << std::endl;
+	std::cout << "w: " << image.w << ", h: " << image.h << std::endl;
+	std::cout << "x0: " << x0 << ", y0: " << y0 << std::endl;
+	std::cout << c00 << std::endl;
+	std::cout << c10 << std::endl;
+	std::cout << c01 << std::endl;
+	std::cout << c11 << std::endl; */
+
+    // Perform linear interpolation in the x direction
+    Spectrum c0 = c00 * (1 - u) + c10 * u;
+    Spectrum c1 = c01 * (1 - u) + c11 * u;
+
+    // Perform linear interpolation in the y direction
+    Spectrum c = c0 * (1 - v) + c1 * v; 
+
+	// Spectrum c = (c00 + c01 + c10 + c11) * 0.5f;
+
+    return c;
 }
 
 
 Spectrum sample_trilinear(HDR_Image const &base, std::vector< HDR_Image > const &levels, Vec2 uv, float lod) {
 	// A1T6: sample_trilinear
 	//TODO: implement trilinear sampling strategy on using mip-map 'levels'
+	// Compute the integer and fractional parts of the LOD
+	// std::cout << "sample_trilinear!!!" << std::endl;
+    
+	int level0 = std::floor(lod);
+    int level1 = std::min(level0 + 1, int(levels.size() - 1));
+    float frac = lod - level0;
 
-	return sample_nearest(base, uv); //placeholder so image doesn't look blank
+    // Perform bilinear sampling on the two mip-map levels
+    Spectrum sample0 = sample_bilinear(levels[level0], uv);
+    Spectrum sample1 = sample_bilinear(levels[level1], uv);
+
+    // Interpolate between the two bilinear samples
+    Spectrum result = sample0 * (1 - frac) + sample1 * frac;
+
+    return result;
 }
 
 /*
@@ -92,7 +151,24 @@ void generate_mipmap(HDR_Image const &base, std::vector< HDR_Image > *levels_) {
 		//TODO: Write code to fill the levels of the mipmap hierarchy by downsampling
 
 		//Be aware that the alignment of the samples in dst and src will be different depending on whether the image is even or odd.
+		for (uint32_t y = 0; y < dst.h; ++y) {
+			for (uint32_t x = 0; x < dst.w; ++x) {
+				// Compute the source coordinates
+				uint32_t src_x0 = 2 * x;
+				uint32_t src_y0 = 2 * y;
+				uint32_t src_x1 = std::min(src_x0 + 1, src.w - 1);
+				uint32_t src_y1 = std::min(src_y0 + 1, src.h - 1);
 
+				// Sample the four nearest texels
+				Spectrum c00 = src.at(src_x0, src_y0);
+				Spectrum c10 = src.at(src_x1, src_y0);
+				Spectrum c01 = src.at(src_x0, src_y1);
+				Spectrum c11 = src.at(src_x1, src_y1);
+
+				// Compute the average color
+				dst.at(x, y) = (c00 + c10 + c01 + c11) * 0.25f;
+			}
+    	}
 	};
 
 	std::cout << "Regenerating mipmap (" << levels.size() << " levels): [" << base.w << "x" << base.h << "]";
