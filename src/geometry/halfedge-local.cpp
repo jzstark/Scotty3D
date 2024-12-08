@@ -329,10 +329,206 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::extrude_face(FaceRef f) {
  *
  * does not create or destroy mesh elements.
  */
+
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(EdgeRef e) {
 	//A2L1: Flip Edge
+	// Check if the edge is a boundary edge
+    HalfedgeRef h0 = e->halfedge;
+    if (h0->face->boundary || h0->twin->face->boundary) {
+        return std::nullopt;
+    }
 	
-    return std::nullopt;
+    HalfedgeRef h1 = h0->next;
+    HalfedgeRef h2 = h1->next;
+    HalfedgeRef h3 = h1->next; //h2
+	while (h3->next != h0) {
+        h3 = h3->next;
+    }
+    HalfedgeRef h4 = h0->twin;
+    HalfedgeRef h5 = h4->next;
+	HalfedgeRef h7 = h4->next; //h5
+	while (h7->next != h4) {
+        h7 = h7->next;
+    }
+	HalfedgeRef h6 = h4->next; //h5
+	while (h6->next != h7) {
+        h6 = h6->next;
+    }
+	HalfedgeRef h8 = h1->twin;
+	HalfedgeRef h9 = h2->twin;
+	HalfedgeRef h10 = h3->twin;
+	HalfedgeRef h11 = h5->twin;
+	HalfedgeRef h12 = h6->twin;
+	HalfedgeRef h13 = h7->twin;
+
+	VertexRef v0 = h0->vertex;
+	VertexRef v1 = h1->vertex;
+	VertexRef v2 = h7->vertex;
+	VertexRef v3 = h2->vertex;
+    
+	FaceRef f0 = h0->face;
+    FaceRef f1 = h4->face;
+
+	std::cout << "Flip Edge Fucks!!!" << std::endl;
+
+	std::cout << "face0 id: " << f0->id << std::endl;
+	std::cout << "face1 id: " << f1->id << std::endl;
+
+	std::cout << "halfedge 0 id: " << h0->id << std::endl;
+	std::cout << "halfedge 1 id: " << h1->id << std::endl;
+	std::cout << "halfedge 2 id: " << h2->id << std::endl;
+	std::cout << "halfedge 3 id: " << h3->id << std::endl;
+	std::cout << "halfedge 4 id: " << h4->id << std::endl;
+	std::cout << "halfedge 5 id: " << h5->id << std::endl;
+	std::cout << "halfedge 6 id: " << h6->id << std::endl;
+	std::cout << "halfedge 7 id: " << h7->id << std::endl;
+	std::cout << "halfedge 8 id: " << h8->id << std::endl;
+	std::cout << "halfedge 9 id: " << h9->id << std::endl;
+	std::cout << "halfedge 10 id: " << h10->id << std::endl;
+	std::cout << "halfedge 11 id: " << h11->id << std::endl;
+	std::cout << "halfedge 12 id: " << h12->id << std::endl;
+	std::cout << "halfedge 13 id: " << h13->id << std::endl;
+
+	std::cout << "vertice 0 id: " << v0->id << std::endl;
+	std::cout << "vertice 1 id: " << v1->id << std::endl;
+	std::cout << "vertice 2 id: " << v2->id << std::endl;
+	std::cout << "vertice 3 id: " << v3->id << std::endl;
+
+	std::cout << "v0's HE id (old): " << v0->halfedge->id << std::endl;
+	std::cout << "v1's HE id (old): " << v1->halfedge->id << std::endl;
+
+	h0->vertex = v2;
+	h4->vertex = v3;
+
+	h1->next = h4;
+	h4->next = h7;
+	h7->next = h1;
+
+	h0->next = h2;
+	h3->next = h5;
+	h6->next = h0;
+
+	h0->face = f0;
+	h2->face = f0;
+	h3->face = f0;
+	h5->face = f0;
+	h6->face = f0;
+	h4->face = f1;
+	h7->face = f1;
+	h1->face = f1;
+
+	v0->halfedge = h5;
+	v1->halfedge = h1;
+	
+	std::cout << "v0's HE id (new): " << v0->halfedge->id << std::endl;
+	std::cout << "v1's HE id (new): " << v1->halfedge->id << std::endl;
+	std::cout << h5->vertex->id  << std::endl;
+
+	/* if (v0->halfedge == h4) {
+		v0->halfedge = h5;
+	}
+	if (v1->halfedge == h0) {
+		v1->halfedge = h1;
+	} */
+	
+	/* 
+	// Phase I: Collect elements
+    HalfedgeRef h1 = h0->next;
+    HalfedgeRef h2 = h1->next;
+    HalfedgeRef h3 = h0->twin;
+    HalfedgeRef h4 = h3->next;
+    HalfedgeRef h5 = h4->next;
+	HalfedgeRef h6 = h1->twin;
+	HalfedgeRef h7 = h2->twin;
+	HalfedgeRef h8 = h4->twin;
+	HalfedgeRef h9 = h5->twin;
+
+    VertexRef v0 = h0->vertex;
+    VertexRef v1 = h3->vertex;
+    VertexRef v2 = h5->vertex;
+    VertexRef v3 = h2->vertex;
+
+	EdgeRef e1 = h5->edge;
+	EdgeRef e2 = h4->edge;
+	EdgeRef e3 = h2->edge;
+	EdgeRef e4 = h1->edge;
+
+    FaceRef f0 = h0->face;
+    FaceRef f1 = h3->face;
+
+	assert(v0->halfedge == h0);
+	assert(v1->halfedge == h1);
+	assert(v2->halfedge == h5);
+	assert(v3->halfedge == h2);
+	assert(e->halfedge == h0);
+	assert(e1->halfedge == h5);
+	assert(e2->halfedge == h4);
+	assert(e3->halfedge == h2);
+	assert(e4->halfedge == h1);
+	assert(f0->halfedge == h2);
+	assert(f1->halfedge == h3);
+
+	
+
+	// Reassgine elements
+	h0->vertex = v2;
+	h0->next = h1;
+	h0->twin = h3;
+	h0->edge = e;//?????
+	h0->face = f0;
+
+	h3->vertex = v3;
+	h3->next = h4;
+	h3->twin = h0;
+	h3->edge = e;//?????
+	h3->face = f1;
+
+	h1->vertex = v3;
+	h1->next = h2; // the new h2!
+	h1->twin = h7; 
+	h1->edge = e3;
+	h1->face = f0;
+
+	h2->vertex = v0;
+	h2->next = h0;
+	h2->twin = h8;
+	h2->edge = e2;
+	h2->face = f0;
+
+	h4->vertex = v2;
+	h4->next = h5;
+	h4->twin = h9;
+	h4->edge = e1;
+	h4->face = f1;
+
+	h5->vertex = v1;
+	h5->next = h3;
+	h5->twin = h6;
+	h5->edge = e4;
+	h5->face = f1;
+
+	h6->twin = h5;
+	h7->twin = h1;
+	h8->twin = h2;
+	h9->twin = h4;
+
+	v0->halfedge = h2;
+	v1->halfedge = h5;
+	v2->halfedge = h4;
+	v3->halfedge = h1;
+
+	e->halfedge = h0;
+	e1->halfedge = h4;
+	e2->halfedge = h2;
+	e3->halfedge = h1;
+	e4->halfedge = h5;
+
+	f0->halfedge = h2;
+	f1->halfedge = h3; 
+
+	*/
+	
+    return e;
 }
 
 
