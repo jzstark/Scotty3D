@@ -3,6 +3,8 @@
 #include "scene/camera.h"
 #include "util/rand.h"
 
+#include <iostream>
+
 
 constexpr uint32_t max_depth = 0;
 
@@ -36,6 +38,9 @@ Test test_a3_task1_sample_ray_simple("a3.task1.sample_ray.simple", []() {
 		ret.transform(iV);
 
 		Line l(ret.point, ret.dir);
+		//std::cout << "ret.point" << ret.point << std::endl;
+		//std::cout << "ret.dir" << ret.dir << std::endl;
+
 		Vec3 hitp;
 		if (!p.hit(l, hitp)) {
 			throw Test::error("Ray did not hit image plane!");
