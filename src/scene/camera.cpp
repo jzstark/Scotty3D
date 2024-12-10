@@ -3,6 +3,8 @@
 #include "../gui/manager.h"
 #include "../pathtracer/samplers.h"
 #include "../test.h"
+#include <cmath>
+
 
 std::pair<Ray, float> Camera::sample_ray(RNG &rng, uint32_t px, uint32_t py) {
 	//A3T1 - step 1 - camera rays
@@ -26,7 +28,9 @@ std::pair<Ray, float> Camera::sample_ray(RNG &rng, uint32_t px, uint32_t py) {
 	Vec2 sensor_pixel = Vec2(float(px), float(py)) + offset;
 
 	// Compute sensor plane dimensions
-	float h = 2.0f * std::tan(vertical_fov * 0.5f);
+ 	double pi = M_PI; 
+	// The degree should be first converted to radian!!!
+	float h = 2.0f * std::tan(vertical_fov * pi * 0.5f / 180.0f);
     float w = h * aspect_ratio;
 
 	//TODO: Transform from sensor pixels into world position on the sensor plane
@@ -39,10 +43,8 @@ std::pair<Ray, float> Camera::sample_ray(RNG &rng, uint32_t px, uint32_t py) {
 	//Build ray:
 	Ray ray;
 	ray.point = Vec3(); //ray should start at the origin
-	// ray.dir = Vec3(0,0,-1); //TODO: compute from sensor plane position
 	// Compute from sensor plane position
-	ray.dir = Vec3(sensor_plane_pos.x, sensor_plane_pos.y, -1.0f).normalize();
-	std::cout << "Ray direction: " << ray.dir << std::endl;
+	ray.dir = Vec3(sensor_plane_pos.x, sensor_plane_pos.y, -1.0f); //.normalize();
 	ray.depth = film.max_ray_depth; //rays should, by default, go as deep as the max depth parameter allows
 	
    	return {ray, offset_pdf};
