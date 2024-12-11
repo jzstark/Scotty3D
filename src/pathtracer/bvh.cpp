@@ -6,6 +6,12 @@
 
 #include <stack>
 
+#include <algorithm>
+#include <limits>
+#include <vector>
+
+#include <iostream>
+
 namespace PT {
 
 struct BVHBuildData {
@@ -33,8 +39,92 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     // size configuration.
 
 	//TODO
-
+	root_idx = build_recursive(0, primitives.size(), max_leaf_size);
+	return;
 }
+
+
+template <typename Primitive>
+size_t BVH<Primitive>::build_recursive(size_t start, size_t end, size_t max_leaf_size) {
+    // Compute the bounding box for the current set of primitives
+    BBox bbox;
+    for (size_t i = start; i < end; ++i) {
+        bbox.enclose(primitives[i].bbox());
+    }
+
+    // Create a leaf node if the number of primitives is below the threshold
+    if (end - start <= max_leaf_size) {
+        return new_node(bbox, start, end - start, 0, 0); 
+    }
+
+    // Initialize variables for the best split
+    size_t best_axis = 0;
+    size_t best_bucket = 0;
+    float best_cost = std::numeric_limits<float>::infinity();
+
+    // Number of buckets for partitioning
+    const size_t num_buckets = 12;
+	
+	std::vector<Vec3> c = bbox.corners();
+	Vec3 allmin = c[0];
+	Vec3 allmax = c[7];
+
+    // Iterate over axes x, y, z
+    for (size_t axis = 0; axis < 3; ++axis) {
+        // Initialize buckets
+        std::vector<SAHBucketData> buckets(num_buckets);
+
+        // Assign primitives to buckets 
+        for (size_t i = start; i < end; ++i) {
+            Vec3 centroid = primitives[i].bbox().center();
+			float ratio = (centroid[axis] - allmin[axis]) / (allmax[axis] - allmin[axis]);
+            size_t bucket_index = std::min(static_cast<size_t>(num_buckets * ratio), num_buckets - 1);
+
+            buckets[bucket_index].bb.enclose(primitives[i].bbox());
+            buckets[bucket_index].num_prims++;
+        }
+
+        // Evaluate partitions using SAH
+        for (size_t i = 0; i < num_buckets - 1; ++i) {
+            BBox bbox_left, bbox_right;
+            size_t count_left = 0, count_right = 0;
+
+            for (size_t j = 0; j <= i; ++j) {
+                bbox_left.enclose(buckets[j].bb);
+                count_left += buckets[j].num_prims;
+            }
+            for (size_t j = i + 1; j < num_buckets; ++j) {
+                bbox_right.enclose(buckets[j].bb);
+                count_right += buckets[j].num_prims;
+            }
+
+            float cost = (count_left * bbox_left.surface_area() + count_right * bbox_right.surface_area()) / bbox.surface_area();
+            if (cost < best_cost) {
+                best_cost = cost;
+                best_axis = axis;
+                best_bucket = i;
+            }
+        }
+    }
+
+    // Partition primitives based on the best split
+    auto mid = std::partition(primitives.begin() + start, primitives.begin() + end, [&](const Primitive& prim) {
+        Vec3 centroid = prim.bbox().center();
+		float ratio = (centroid[best_axis] - allmin[best_axis]) / (allmax[best_axis] - allmin[best_axis]);
+        size_t bucket_index = std::min(static_cast<size_t>(num_buckets * ratio), num_buckets - 1);
+        return bucket_index <= best_bucket;
+    });
+
+    size_t mid_index = std::distance(primitives.begin(), mid);
+
+    // Recursively build the left and right child nodes
+	size_t left_child = build_recursive(start, mid_index, max_leaf_size);
+    size_t right_child = build_recursive(mid_index, end, max_leaf_size);
+
+    // Create and return the internal node
+    return new_node(bbox, start, end - start, left_child, right_child);
+}
+
 
 template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
 	//A3T3 - traverse your BVH
