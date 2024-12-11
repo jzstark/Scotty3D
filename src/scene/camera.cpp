@@ -44,7 +44,7 @@ std::pair<Ray, float> Camera::sample_ray(RNG &rng, uint32_t px, uint32_t py) {
 	Ray ray;
 	ray.point = Vec3(); //ray should start at the origin
 	// Compute from sensor plane position
-	ray.dir = Vec3(sensor_plane_pos.x, sensor_plane_pos.y, -1.0f).normalize();
+	ray.dir = Vec3(sensor_plane_pos.x, sensor_plane_pos.y, -1.0f).unit();
 	ray.depth = film.max_ray_depth; //rays should, by default, go as deep as the max depth parameter allows
 	
    	return {ray, offset_pdf};

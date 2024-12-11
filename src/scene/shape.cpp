@@ -30,13 +30,60 @@ PT::Trace Sphere::hit(Ray ray) const {
     // but only the _later_ one is within ray.dist_bounds, you should
     // return that one!
 
+	// Sphere center is at the origin, radius is Sphere::radius
+    float radius = this->radius;
+
+    // Calculate the coefficients of the quadratic equation
+    Vec3 oc = ray.point; // Ray origin is the same as oc (origin to center)
+    float a = dot(ray.dir, ray.dir);
+    float b = 2.0f * dot(oc, ray.dir);
+    float c = dot(oc, oc) - radius * radius;
+
+    // Solve the quadratic equation
+    float discriminant = b * b - 4 * a * c;
+
     PT::Trace ret;
     ret.origin = ray.point;
-    ret.hit = false;       // was there an intersection?
-    ret.distance = 0.0f;   // at what distance did the intersection occur?
-    ret.position = Vec3{}; // where was the intersection?
-    ret.normal = Vec3{};   // what was the surface normal at the intersection?
-	ret.uv = Vec2{}; 	   // what was the uv coordinates at the intersection? (you may find Sphere::uv to be useful)
+    ret.hit = false;
+
+    if (discriminant < 0) {
+        // No real roots, the ray does not intersect the sphere
+        return ret;
+    }
+
+    // Calculate the two roots (t0 and t1)
+    float sqrt_discriminant = std::sqrt(discriminant);
+    float t0 = (-b - sqrt_discriminant) / (2.0f * a);
+    float t1 = (-b + sqrt_discriminant) / (2.0f * a);
+
+    // Ensure t0 is the smaller root
+    if (t0 > t1) std::swap(t0, t1);
+
+    // Check if the intersection is within the ray's distance bounds
+    if (t0 < ray.dist_bounds.x || t0 > ray.dist_bounds.y) {
+        t0 = t1; // Use the second intersection point if the first is out of bounds
+        if (t0 < ray.dist_bounds.x || t0 > ray.dist_bounds.y) {
+            return ret; // Both intersections are out of bounds
+        }
+    }
+
+    // Calculate the intersection point
+    Vec3 intersection_point = ray.point + t0 * ray.dir;
+
+    // Calculate the normal at the intersection point
+    Vec3 normal = intersection_point.unit();
+
+    // Calculate the UV coordinates at the intersection point
+    Vec2 uv = Sphere::uv(normal);
+
+    // Fill in the Trace object with intersection details
+
+    ret.origin = ray.point;
+    ret.hit = true;       // was there an intersection?
+    ret.distance = t0;   // at what distance did the intersection occur?
+    ret.position = intersection_point; // where was the intersection?
+    ret.normal = normal;   // what was the surface normal at the intersection?
+	ret.uv = uv; 	   // what was the uv coordinates at the intersection? (you may find Sphere::uv to be useful)
     return ret;
 }
 

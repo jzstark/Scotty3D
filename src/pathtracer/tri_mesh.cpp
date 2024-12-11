@@ -14,9 +14,17 @@ BBox Triangle::bbox() const {
 
     // Beware of flat/zero-volume boxes! You may need to
     // account for that here, or later on in BBox::hit.
+	// Retrieve the positions of the triangle vertices
+    Vec3 p0 = vertex_list[v0].position;
+    Vec3 p1 = vertex_list[v1].position;
+    Vec3 p2 = vertex_list[v2].position;
 
-    BBox box;
-    return box;
+    // Determine the minimum and maximum coordinates
+    Vec3 min_point = hmin(p0, hmin(p1, p2));
+    Vec3 max_point = hmax(p0, hmax(p1, p2));
+
+    // Create and return the bounding box
+    return BBox(min_point, max_point);
 }
 
 Trace Triangle::hit(const Ray& ray) const {
