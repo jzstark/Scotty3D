@@ -26,21 +26,64 @@ Trace Triangle::hit(const Ray& ray) const {
     Tri_Mesh_Vert v_0 = vertex_list[v0];
     Tri_Mesh_Vert v_1 = vertex_list[v1];
     Tri_Mesh_Vert v_2 = vertex_list[v2];
-    (void)v_0;
-    (void)v_1;
-    (void)v_2;
+    Vec3 p0 = v_0.position;
+    Vec3 p1 = v_1.position;
+    Vec3 p2 = v_2.position;
 
     // TODO (PathTracer): Task 2
     // Intersect the ray with the triangle defined by the three vertices.
 
+	Vec3 edge1 = p1 - p0;
+	Vec3 edge2 = p2 - p0; 
+	Vec3 h = cross(ray.dir, edge2);
+	float det = dot(edge1, h);
+
+	 // If the determinant is close to 0, the ray is parallel to the triangle
+    if (std::abs(det) < 1e-8) {
+        return Trace{};
+    }
+
+	float invdet = 1.0f / det;
+    Vec3 s = ray.point - p0;
+    float u = invdet * dot(s, h);
+
+	// Check if the intersection is outside the triangle
+    if (u < 0.0f || u > 1.0f) {
+        return Trace{};
+    }
+	Vec3 q = cross(s, edge1);
+    float v = invdet * dot(ray.dir, q);
+
+	// Check if the intersection is outside the triangle
+    if (v < 0.0f || u + v > 1.0f) {
+        return Trace{};
+    }
+
+	// Calculate the distance to the intersection point
+    float t = invdet * dot(edge2, q);
+
+    // If t is less than 0, the intersection is behind the ray origin
+    if (t < 0.0f) {
+        return Trace{};
+    }
+
+	// Calculate the intersection point
+    Vec3 intersection_point = ray.point + t * ray.dir;
+
+    // Interpolate the normal and UV coordinates using barycentric coordinates
+    Vec3 normal = (1 - u - v) * v_0.normal + u * v_1.normal + v * v_2.normal;
+	normal = normal.normalize();
+    Vec2 uv = (1 - u - v) * v_0.uv + u * v_1.uv + v * v_2.uv;
+
+	// Create the trace object
     Trace ret;
     ret.origin = ray.point;
-    ret.hit = false;       // was there an intersection?
-    ret.distance = 0.0f;   // at what distance did the intersection occur?
-    ret.position = Vec3{}; // where was the intersection?
-    ret.normal = Vec3{};   // what was the surface normal at the intersection?
+    ret.hit = true;        // was there an intersection?
+    ret.distance = t;      // at what distance did the intersection occur?
+    ret.position = intersection_point; // where was the intersection?
+    ret.normal = normal;   // what was the surface normal at the intersection?
                            // (this should be interpolated between the three vertex normals)
-	ret.uv = Vec2{};	   // What was the uv associated with the point of intersection?
+	ret.uv = uv;	       // What was the uv associated with the point of intersection?
 						   // (this should be interpolated between the three vertex uvs)
     return ret;
 }
