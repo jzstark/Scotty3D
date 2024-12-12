@@ -12,6 +12,8 @@
 #include "vec2.h"
 #include "vec3.h"
 
+#include <iostream>
+
 struct BBox {
 
 	/// Default min is max float value, default max is negative max float value
@@ -85,7 +87,11 @@ struct BBox {
 		// If the ray intersected the bounding box within the range given by
 		// [times.x,times.y], update times with the new intersection times.
 		// This means at least one of tmin and tmax must be within the range
+		std::cout << "shit0 " << ray.dir.x << std::endl;
 
+
+		// TODO: ray.dir should not be zero!!!
+		
 		float tmin = (min.x - ray.point.x) / ray.dir.x;
 		float tmax = (max.x - ray.point.x) / ray.dir.x;
 

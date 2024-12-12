@@ -137,12 +137,72 @@ template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
     // Again, remember you can use hit() on any Primitive value.
 
 	//TODO: replace this code with a more efficient traversal:
-    Trace ret;
-    for(const Primitive& prim : primitives) {
-        Trace hit = prim.hit(ray);
+    
+	/*  Trace ret;
+        for(const Primitive& prim : primitives) {
+    	Trace hit = prim.hit(ray);
         ret = Trace::min(ret, hit);
+    } */
+    
+	Trace closest_hit;
+    closest_hit.distance = std::numeric_limits<float>::infinity();
+    find_closest(ray, root_idx, closest_hit);
+    return closest_hit;
+}
+
+
+// Unfinished!!! 
+template<typename Primitive>
+void BVH<Primitive>::find_closest(const Ray& ray, size_t node_idx, Trace& closest) const {
+    const Node& node = nodes[node_idx];
+
+    // Test intersection with the bounding box
+    Vec2 t(0.0f, std::numeric_limits<float>::infinity());
+	std::cout << node.bbox.hit(ray, t) << std::endl;
+	std::cout << "~~~~~~~~~~~ !!!!" << std::endl;
+    if (!node.bbox.hit(ray, t)) return;
+
+
+    // If the node is a leaf, test intersection with the primitives
+    if (node.is_leaf()) {
+        for (size_t i = node.start; i < node.start + node.size; ++i) {
+            Trace hit = primitives[i].hit(ray);
+            if (hit.distance < closest.distance) {
+                closest = hit;
+            }
+        }
+		std::cout << "fuuuuuuuuc!!!!!" << std::endl;
+    } else {
+        // Recursively test the children nodes
+        size_t left_child = node.l;
+        size_t right_child = node.r;
+		std::cout << "-======== !" << std::endl;
+
+        float hit1_distance, hit2_distance;
+        Vec2 t1(0.0f, std::numeric_limits<float>::infinity());
+        if (!nodes[left_child].bbox.hit(ray, t)) {
+            hit1_distance = t1.y;
+        }
+		hit1_distance = t1.x;
+		Vec2 t2(0.0f, std::numeric_limits<float>::infinity());
+		if (!nodes[right_child].bbox.hit(ray, t)) {
+			hit2_distance = t2.y;
+		}
+		hit2_distance = t2.x;
+		
+        // Trace hit1 = nodes[left_child].bbox.hit(ray, t);
+        // Trace hit2 = nodes[right_child].bbox.hit(ray, t);
+
+		size_t first = hit1_distance  <= hit2_distance ? left_child : right_child;
+		size_t second = hit1_distance <= hit2_distance ? right_child : left_child;
+		float secondHit_d = hit1_distance <= hit2_distance ? hit2_distance : hit1_distance;
+
+		find_closest(ray, first, closest);
+		std::cout << "shiiiiiiiiit" << closest.distance << std::endl;
+		if (secondHit_d < closest.distance) {
+			find_closest(ray, second, closest);
+		}
     }
-    return ret;
 }
 
 template<typename Primitive>
