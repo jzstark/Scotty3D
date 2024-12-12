@@ -143,7 +143,10 @@ template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
     	Trace hit = prim.hit(ray);
         ret = Trace::min(ret, hit);
     } */
-    
+   	if(nodes.empty()) {
+		return Trace(false, Vec3(), Vec3(), Vec3(), Vec2{});
+	}
+
 	Trace closest_hit;
     closest_hit.distance = std::numeric_limits<float>::infinity();
     find_closest(ray, root_idx, closest_hit);
@@ -158,25 +161,18 @@ void BVH<Primitive>::find_closest(const Ray& ray, size_t node_idx, Trace& closes
 
     // Test intersection with the bounding box
     Vec2 t(0.0f, std::numeric_limits<float>::infinity());
-	std::cout << node.bbox.hit(ray, t) << std::endl;
-	std::cout << "~~~~~~~~~~~ !!!!" << std::endl;
     if (!node.bbox.hit(ray, t)) return;
-
 
     // If the node is a leaf, test intersection with the primitives
     if (node.is_leaf()) {
         for (size_t i = node.start; i < node.start + node.size; ++i) {
             Trace hit = primitives[i].hit(ray);
-            if (hit.distance < closest.distance) {
-                closest = hit;
-            }
+			closest = Trace::min(closest, hit);
         }
-		std::cout << "fuuuuuuuuc!!!!!" << std::endl;
     } else {
         // Recursively test the children nodes
         size_t left_child = node.l;
         size_t right_child = node.r;
-		std::cout << "-======== !" << std::endl;
 
         float hit1_distance, hit2_distance;
         Vec2 t1(0.0f, std::numeric_limits<float>::infinity());
@@ -198,7 +194,6 @@ void BVH<Primitive>::find_closest(const Ray& ray, size_t node_idx, Trace& closes
 		float secondHit_d = hit1_distance <= hit2_distance ? hit2_distance : hit1_distance;
 
 		find_closest(ray, first, closest);
-		std::cout << "shiiiiiiiiit" << closest.distance << std::endl;
 		if (secondHit_d < closest.distance) {
 			find_closest(ray, second, closest);
 		}
