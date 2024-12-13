@@ -41,24 +41,35 @@ Spectrum Lambertian::evaluate(Vec3 out, Vec3 in, Vec2 uv) const {
     // Compute the ratio of outgoing/incoming radiance when light from in_dir
     // is reflected through out_dir: (albedo / PI_F) * cos(theta).
     // Note that for Scotty3D, y is the 'up' direction.
+	
+	// Compute the albedo at the given UV coordinates
+    Spectrum albedo_value = albedo.lock()->evaluate(uv);
 
-    return Spectrum{};
+    // Compute the cosine of the angle between the surface normal and the incoming direction
+    float cos_theta = std::max(0.0f, in.y);
+
+    // Compute the Lambertian reflectance
+    Spectrum reflectance = (albedo_value / PI_F) * cos_theta;
+    return reflectance;
 }
 
 Scatter Lambertian::scatter(RNG &rng, Vec3 out, Vec2 uv) const {
 	//A3T4: Materials - Lambertian BSDF scattering
 	//Select a scattered light direction at random from the Lambertian BSDF
 
-	[[maybe_unused]] Samplers::Hemisphere::Cosine sampler; //this will be useful
+	// Use a cosine-weighted hemisphere sampler to sample the scattered direction
+    Samplers::Hemisphere::Cosine sampler;
+    Vec3 scattered_direction = sampler.sample(rng);
 
-	Scatter ret;
-	//TODO: sample the direction the light was scatter from from a cosine-weighted hemisphere distribution:
-	ret.direction = Vec3{};
+    // Compute the attenuation using Lambertian::evaluate
+    Spectrum attenuation = evaluate(out, scattered_direction, uv);
 
-	//TODO: compute the attenuation of the light using Lambertian::evaluate():
-	ret.attenuation = Spectrum{};
+    // Create the Scatter object with the sampled direction and computed attenuation
+    Scatter ret;
+    ret.direction = scattered_direction;
+    ret.attenuation = attenuation;
 
-	return ret;
+    return ret;
 }
 
 float Lambertian::pdf(Vec3 out, Vec3 in) const {
@@ -66,7 +77,13 @@ float Lambertian::pdf(Vec3 out, Vec3 in) const {
     // Compute the PDF for sampling in_dir from the cosine-weighted hemisphere distribution.
 	[[maybe_unused]] Samplers::Hemisphere::Cosine sampler; //this might be handy!
 
-    return 0.0f;
+	// Compute the cosine of the angle between the surface normal and the incoming direction
+    float cos_theta = std::max(0.0f, in.y);
+
+    // Compute the PDF for sampling the incoming direction from the cosine-weighted hemisphere distribution
+    float pdf_value = cos_theta / PI_F;
+
+    return pdf_value;
 }
 
 Spectrum Lambertian::emission(Vec2 uv) const {
