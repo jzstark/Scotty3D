@@ -137,20 +137,22 @@ template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
     // Again, remember you can use hit() on any Primitive value.
 
 	//TODO: replace this code with a more efficient traversal:
-    
-	/*  Trace ret;
-        for(const Primitive& prim : primitives) {
+    //NOTE: this is crucial to performance for complex scenarios; currently set to naive implementation for correctnsss.
+	Trace ret;
+    for(const Primitive& prim : primitives) {
     	Trace hit = prim.hit(ray);
         ret = Trace::min(ret, hit);
-    } */
-   	if(nodes.empty()) {
+    }
+	return ret; 
+
+   	/* if(nodes.empty()) {
 		return Trace(false, Vec3(), Vec3(), Vec3(), Vec2{});
 	}
 
 	Trace closest_hit;
     closest_hit.distance = std::numeric_limits<float>::infinity();
     find_closest(ray, root_idx, closest_hit);
-    return closest_hit;
+    return closest_hit; */
 }
 
 

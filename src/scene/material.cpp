@@ -76,14 +76,12 @@ float Lambertian::pdf(Vec3 out, Vec3 in) const {
 	//A3T4: Materials - Lambertian BSDF probability density function
     // Compute the PDF for sampling in_dir from the cosine-weighted hemisphere distribution.
 	[[maybe_unused]] Samplers::Hemisphere::Cosine sampler; //this might be handy!
-
-	// Compute the cosine of the angle between the surface normal and the incoming direction
+	return sampler.pdf(in);
+	/* // Compute the cosine of the angle between the surface normal and the incoming direction
     float cos_theta = std::max(0.0f, in.y);
-
     // Compute the PDF for sampling the incoming direction from the cosine-weighted hemisphere distribution
-    float pdf_value = cos_theta / PI_F;
-
-    return pdf_value;
+    float pdf_value = cos_theta / PI_F; 
+    return pdf_value; */
 }
 
 Spectrum Lambertian::emission(Vec2 uv) const {

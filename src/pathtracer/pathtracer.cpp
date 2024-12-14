@@ -6,13 +6,33 @@
 #include <SDL.h>
 #include <thread>
 
+#include "../scene/material.h"
+
 namespace PT {
 
-constexpr bool SAMPLE_AREA_LIGHTS = true;
-constexpr bool RENDER_NORMALS = true;
-constexpr bool LOG_CAMERA_RAYS = true; //false;
-constexpr bool LOG_AREA_LIGHT_RAYS = false;
+constexpr bool SAMPLE_AREA_LIGHTS = false;
+constexpr bool RENDER_NORMALS = false;
+constexpr bool LOG_CAMERA_RAYS = false;
+constexpr bool LOG_AREA_LIGHT_RAYS = true;
 static thread_local RNG log_rng(0x15462662); //separate RNG for logging a fraction of rays to avoid changing result when logging enabled
+
+/* 
+// For debugging purpose 
+float random_float() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+    return dis(gen);
+}
+
+// Function to generate a random Spectrum instance
+Spectrum random_spectrum() {
+    float r = random_float();
+    float g = random_float();
+    float b = random_float();
+    return Spectrum(r, g, b);
+} 
+*/
 
 Spectrum Pathtracer::sample_direct_lighting_task4(RNG &rng, const Shading_Info& hit) {
 	//A3T4: Pathtracer - direct light sampling (basic sampling)
@@ -27,15 +47,22 @@ Spectrum Pathtracer::sample_direct_lighting_task4(RNG &rng, const Shading_Info& 
     Spectrum radiance = sum_delta_lights(hit);
 
 	//TODO: ask hit.bsdf to sample an in direction that would scatter out along hit.out_dir
+	Materials::Scatter scatter = hit.bsdf.scatter(rng, hit.out_dir, hit.uv);
 
 	//TODO: rotate that direction into world coordinates
+	Vec3 world_direction = hit.object_to_world.rotate(scatter.direction);
 
 	//TODO: construct a ray travelling in that direction
 	// NOTE: because we want emitted light only, can use depth = 0 for the ray
+	Ray new_ray(hit.pos, world_direction);
+    new_ray.depth = 0; // Set the ray depth to 0
+    new_ray.dist_bounds.x = 1e-4f; // Avoid self-intersection
 
 	//TODO: trace() the ray to get the emitted light (first part of the return value)
+	auto [direct, indirect] = trace(rng, new_ray);
 
 	//TODO: weight properly depending on the probability of the sampled scattering direction and add to radiance
+	radiance += scatter.attenuation * direct / hit.bsdf.pdf(hit.out_dir, scatter.direction);
 
 	return radiance;
 }
@@ -65,17 +92,22 @@ Spectrum Pathtracer::sample_indirect_lighting(RNG &rng, const Shading_Info& hit)
 	//NOTE: this function and sample_direct_lighting_task4() perform very similar tasks.
 
 	//TODO: ask hit.bsdf to sample an in direction that would scatter out along hit.out_dir
+	Materials::Scatter scatter = hit.bsdf.scatter(rng, hit.out_dir, hit.uv);
 
 	//TODO: rotate that direction into world coordinates
+	Vec3 world_direction = hit.object_to_world.rotate(scatter.direction);
 
 	//TODO: construct a ray travelling in that direction
 	// NOTE: be sure to reduce the ray depth! otherwise infinite recursion is possible
-
+	Ray new_ray(hit.pos, world_direction);
+    new_ray.depth = hit.depth - 1; // Reduce the ray depth to avoid infinite recursion
+    new_ray.dist_bounds.x = 1e-4f; // Avoid self-intersection
+		
 	//TODO: trace() the ray to get the reflected light (the second part of the return value)
+	auto [emissive, indirect] = trace(rng, new_ray);
 
 	//TODO: weight properly depending on the probability of the sampled scattering direction and set radiance
-
-	Spectrum radiance;
+	Spectrum radiance = scatter.attenuation * indirect / hit.bsdf.pdf(hit.out_dir, scatter.direction);
     return radiance;
 }
 
@@ -119,13 +151,16 @@ std::pair<Spectrum, Spectrum> Pathtracer::trace(RNG &rng, const Ray& ray) {
 	if (ray.depth == 0 || bsdf->is_emissive()) return {emissive, {}};
 
 	Spectrum direct;
+	// Direct: light that comes directly from light source and hits the surface without any bounces
 	if constexpr (SAMPLE_AREA_LIGHTS) {
 		direct = sample_direct_lighting_task6(rng, info);
 	} else {
 		direct = sample_direct_lighting_task4(rng, info);
 	}
 
-	return {emissive, direct + sample_indirect_lighting(rng, info)};
+	// Indirect: light that bounced off one or more surfaces before hitting the current surface
+	Spectrum indirect = sample_indirect_lighting(rng, info);
+	return {emissive, direct + indirect};
 }
 
 Pathtracer::Pathtracer() : thread_pool(std::thread::hardware_concurrency()) {
