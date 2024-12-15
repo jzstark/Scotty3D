@@ -23,6 +23,8 @@ Spectrum sample_nearest(HDR_Image const &image, Vec2 uv) {
 	return image.at(ix, iy);
 }
 
+
+//TODO: WARNING: This function is incorrect; it may have impact on the A3T7 part and others.
 Spectrum sample_bilinear(HDR_Image const &image, Vec2 uv) {
 	// A1T6: sample_bilinear
 	//TODO: implement bilinear sampling strategy on texture 'image'

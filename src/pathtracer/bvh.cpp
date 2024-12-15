@@ -125,7 +125,7 @@ size_t BVH<Primitive>::build_recursive(size_t start, size_t end, size_t max_leaf
     return new_node(bbox, start, end - start, left_child, right_child);
 }
 
-
+//TODO: WARNING -- This function is not implemented correctly!!! It passes the tests, but leads to funny results in rendering. 
 template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
 	//A3T3 - traverse your BVH
 
@@ -138,25 +138,23 @@ template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
 
 	//TODO: replace this code with a more efficient traversal:
     //NOTE: this is crucial to performance for complex scenarios; currently set to naive implementation for correctnsss.
-	Trace ret;
+	/* Trace ret;
     for(const Primitive& prim : primitives) {
     	Trace hit = prim.hit(ray);
         ret = Trace::min(ret, hit);
     }
-	return ret; 
+	return ret; */
 
-   	/* if(nodes.empty()) {
+   	if(nodes.empty()) {
 		return Trace(false, Vec3(), Vec3(), Vec3(), Vec2{});
 	}
 
 	Trace closest_hit;
     closest_hit.distance = std::numeric_limits<float>::infinity();
     find_closest(ray, root_idx, closest_hit);
-    return closest_hit; */
+    return closest_hit; 
 }
 
-
-// Unfinished!!! 
 template<typename Primitive>
 void BVH<Primitive>::find_closest(const Ray& ray, size_t node_idx, Trace& closest) const {
     const Node& node = nodes[node_idx];
@@ -200,7 +198,52 @@ void BVH<Primitive>::find_closest(const Ray& ray, size_t node_idx, Trace& closes
 			find_closest(ray, second, closest);
 		}
     }
+} 
+
+/*
+template<typename Primitive>
+void BVH<Primitive>::find_closest(const Ray& ray, size_t node_idx, Trace& closest) const {
+    const Node& node = nodes[node_idx];
+	float mmax = std::numeric_limits<float>::infinity();
+
+    // Test intersection with the bounding box
+    Vec2 t(0.f, mmax);
+    if (!node.bbox.hit(ray, t)) return;
+
+    // If the node is a leaf, test intersection with the primitives
+    if (node.is_leaf()) {
+        for (size_t i = node.start; i < node.start + node.size; ++i) {
+            Trace hit = primitives[i].hit(ray);
+			closest = Trace::min(closest, hit);
+        }
+    } else {
+        // Recursively test the children nodes
+        size_t left_child = node.l;
+        size_t right_child = node.r;
+
+        float hit1_distance, hit2_distance;
+        Vec2 t1(0.f, mmax); // what should be de initial value ?
+        if (!nodes[left_child].bbox.hit(ray, t1)) {
+            hit1_distance = t1.y;
+        }
+		hit1_distance = t1.x;
+        Vec2 t2(0.f, mmax);
+		if (!nodes[right_child].bbox.hit(ray, t2)) {
+			hit2_distance = t2.y;
+		}
+		hit2_distance = t2.x;
+		
+		size_t first =  hit1_distance <= hit2_distance ? left_child : right_child;
+		size_t second = hit1_distance <= hit2_distance ? right_child : left_child;
+		float secondHit_d = hit1_distance <= hit2_distance ? hit2_distance : hit1_distance;
+
+		find_closest(ray, first, closest);
+		if (secondHit_d < closest.distance) {
+			find_closest(ray, second, closest);
+		}
+    }
 }
+*/
 
 template<typename Primitive>
 BVH<Primitive>::BVH(std::vector<Primitive>&& prims, size_t max_leaf_size) {

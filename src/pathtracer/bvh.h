@@ -56,6 +56,7 @@ private:
 	size_t new_node(BBox box = {}, size_t start = 0, size_t size = 0, size_t l = 0, size_t r = 0);
 	size_t build_recursive(size_t start, size_t end, size_t max_leaf_size);
 	void find_closest(const Ray& ray, size_t node_idx, Trace& closest) const;
+	// Trace find_closest_hit(const Ray& ray, size_t node) const;
 };
 
 } // namespace PT
