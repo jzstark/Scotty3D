@@ -10,7 +10,7 @@
 
 namespace PT {
 
-constexpr bool SAMPLE_AREA_LIGHTS = false;
+constexpr bool SAMPLE_AREA_LIGHTS = true;
 constexpr bool RENDER_NORMALS = false;
 constexpr bool LOG_CAMERA_RAYS = false;
 constexpr bool LOG_AREA_LIGHT_RAYS = true;
@@ -70,7 +70,9 @@ Spectrum Pathtracer::sample_direct_lighting_task4(RNG &rng, const Shading_Info& 
 Spectrum Pathtracer::sample_direct_lighting_task6(RNG &rng, const Shading_Info& hit) {
 	//A3T6: Pathtracer - direct light sampling (mixture sampling)
 	// TODO (PathTracer): Task 6
-
+	if (hit.bsdf.is_specular()) 
+		return sample_direct_lighting_task4(rng, hit);
+	
     // For task 6, we want to upgrade our direct light sampling procedure to also
     // sample area lights using mixture sampling.
 	Spectrum radiance = sum_delta_lights(hit);
@@ -79,6 +81,45 @@ Spectrum Pathtracer::sample_direct_lighting_task6(RNG &rng, const Shading_Info& 
 	if constexpr (LOG_AREA_LIGHT_RAYS) {
 		if (log_rng.coin_flip(0.001f)) log_ray(Ray(), 100.0f);
 	}
+
+    // Randomly choose between BSDF sampling and area light sampling with equal probability
+    bool sample_bsdf = rng.coin_flip(0.5f);
+
+    Vec3 sampled_direction;
+    float pdf_bsdf, pdf_light;
+    Spectrum attenuation;
+
+    if (sample_bsdf) {
+        // Sample direction from BSDF
+        Materials::Scatter scatter = hit.bsdf.scatter(rng, hit.out_dir, hit.uv);
+        sampled_direction = hit.object_to_world.rotate(scatter.direction);
+        attenuation = scatter.attenuation;
+        pdf_bsdf = hit.bsdf.pdf(hit.out_dir, scatter.direction);
+        pdf_light = area_lights_pdf(hit.pos, sampled_direction);
+    } else {
+        // Sample direction from area lights
+        sampled_direction = sample_area_lights(rng, hit.pos);
+        Vec3 local_direction = hit.world_to_object.rotate(sampled_direction);
+        attenuation = hit.bsdf.evaluate(hit.out_dir, local_direction, hit.uv);
+        pdf_bsdf = hit.bsdf.pdf(hit.out_dir, local_direction);
+        pdf_light = area_lights_pdf(hit.pos, sampled_direction);
+    }
+
+    // Create a new world-space ray (shadow ray)
+    Ray shadow_ray(hit.pos, sampled_direction);
+    shadow_ray.depth = 0; // Set the ray depth to 0
+    shadow_ray.dist_bounds.x = 1e-4f; // Avoid self-intersection
+
+    // Trace the shadow ray to get the emitted light (first part of the return value)
+    auto [direct, indirect] = trace(rng, shadow_ray);
+
+    // Compute the combined PDF
+    float combined_pdf = 0.5f * (pdf_bsdf + pdf_light);
+
+    // Add estimate of incoming light scaled by BSDF attenuation
+    if (combined_pdf > 0.0f) {
+        radiance += attenuation * direct / combined_pdf;
+    }
 
 	return radiance;
 }
